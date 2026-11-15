@@ -324,10 +324,10 @@ async function loadPeople(){
   for(const {target} of v){
     const {data:pr}=await sb.from("profiles").select("name").eq("user_id",target).maybeSingle();
     const {data:docs}=await sb.from("docs").select("doc_id,data").eq("scope","u:"+target);
-    const days={};let tgt=null;
-    (docs||[]).forEach(r=>{if(r.doc_id==="settings")tgt=r.data&&r.data.target;
+    const days={};let tgt=null,ll=null;
+    (docs||[]).forEach(r=>{if(r.doc_id==="settings")tgt=r.data&&r.data.target;else if(r.doc_id==="liftlog")ll=r.data;
       else if(r.doc_id.startsWith("day-")){const it=(r.data&&r.data.items)||[];if(it.length)days[r.doc_id.slice(4)]=Math.round(it.reduce((a,i)=>a+(+i.kcal||0),0))}});
-    const nm=(pr&&pr.name)||"Family";out.push({id:target,name:NICK[nm.toLowerCase()]||nm,target:tgt,days});
+    const nm=(pr&&pr.name)||"Family";out.push({id:target,name:NICK[nm.toLowerCase()]||nm,target:tgt,days,liftlog:ll});
   }
   PEOPLE=out;const b=document.querySelector('.tab[data-tab="people"]');if(b){b.hidden=false;const l=$("#peoplelabel");if(l)l.textContent=PEOPLE[0].name}
   if(tab==="people"&&!document.querySelector(".sheet"))render()}
@@ -339,7 +339,8 @@ function renderPeople(){
   const rows=last.map(d=>{const k=P.days[d];const pct=t&&k?Math.min(100,k/t*100):0;const over=t&&k>t;
     return `<div class="item" style="flex-direction:column;align-items:stretch;gap:4px"><div class="row" style="justify-content:space-between"><span>${d===tk?"Today":esc(shortDate(d))}</span><span class="num">${k!=null?fmt(k)+" kcal":"—"}</span></div>${k!=null&&t?`<div style="height:6px;border-radius:3px;background:var(--line)"><div style="height:6px;border-radius:3px;width:${pct}%;background:${over?"var(--over)":"var(--accent)"}"></div></div>`:""}</div>`}).join("");
   const logged=last.filter(d=>d<tk&&P.days[d]!=null),avg=logged.length?logged.reduce((a,d)=>a+P.days[d],0)/logged.length:null;
-  const ll=liftLogData();let body="";
+  /* her weights and lifts: copied into Fuel Log by her Lift Log; otherwise whatever Lift Log has on this phone */
+  const ll=P.liftlog||liftLogData();let body="";
   if(ll&&Array.isArray(ll.body)){
     const w=ll.body.filter(r=>r.weight!=null).sort((a,b)=>a.date<b.date?-1:1),st=ll.settings&&ll.settings.startWeight;
     if(w.length){const cur=w[w.length-1].weight,from=st!=null?st:w[0].weight,ch=cur-from;
@@ -350,7 +351,7 @@ function renderPeople(){
     const ln=Object.keys(best);
     if(ln.length)body+=`<div class="item"><span class="name"><strong>Heaviest lifts</strong></span></div>`+ln.map(n=>`<div class="item"><span class="name">${esc(n)}<br><span class="amt">${esc(shortDate(best[n].d))}</span></span><span class="num">${best[n].w} kg</span></div>`).join("");
   }
-  if(!body)body=`<div class="empty">Open <a href="../lift-log/">Lift Log</a> on this phone once (with Chaz's sheet connected) and her weight and lifts will show here.</div>`;
+  if(!body)body=`<div class="empty">Her weight and lifts appear here once she connects Lift Log to her Fuel Log account (the sign-in box under Target calories in Lift Log).</div>`;
   return `<header class="dayhead"><div class="title"><h1>${esc(P.name)}</h1><div class="sub muted">${t?`Target ${fmt(t)} kcal a day`:"No calorie target set yet"}${avg!=null?` · last ${logged.length} days average ${fmt(avg)} kcal`:""}</div></div></header>
     <section class="meal"><div class="mealhead"><h3>Calories, last 14 days</h3></div><div class="list">${rows}</div></section>
     <section class="meal"><div class="mealhead"><h3>Weight & lifts</h3><a class="btn small ghost" href="../lift-log/" style="margin-left:auto;text-decoration:none">Open Lift Log</a></div><div class="list">${body}</div></section>`}
