@@ -260,7 +260,7 @@ function basisText(f){return f.basis==="item"?`${fmt(f.kcal)} kcal per ${esc(f.i
 const queues={};
 function save(id,data){
   if(store==="db"){
-    const row={scope:scopeOf(id),doc_id:id,data:JSON.parse(JSON.stringify(data)),updated_at:new Date().toISOString(),updated_by:ME.id};
+    const row={scope:scopeOf(id),doc_id:id,data:flipPlan(id,JSON.parse(JSON.stringify(data))),updated_at:new Date().toISOString(),updated_by:ME.id};
     queues[id]=(queues[id]||Promise.resolve()).then(async()=>{const {error}=await sb.from("docs").upsert(row);if(error)throw error}).catch(e=>toast("Couldn't save: "+(e&&e.message||"try again")));
   }else if(store==="local"){
     try{localStorage.setItem("fuel:"+id,JSON.stringify(data))}catch(e){}
@@ -313,7 +313,7 @@ async function boot(){
     if(p.eventType==="DELETE"){const id=p.old&&p.old.doc_id;if(id&&id.startsWith("day-")&&p.old.scope==="u:"+ME.id)delete S.days[id.slice(4)];if(!document.querySelector(".sheet"))render();return}
     if(!r||r.updated_by===ME.id)return;            /* our own save coming back */
     if(!(r.scope==="lib"||r.scope==="u:"+ME.id||r.scope==="h:"+PROFILE.household_id))return; /* someone else's (e.g. viewing Chaz) */
-    ingest(r.doc_id,r.data);if(!document.querySelector(".sheet"))render()}).subscribe();
+    ingest(r.doc_id,flipPlan(r.doc_id,r.data));if(!document.querySelector(".sheet"))render()}).subscribe();
   document.addEventListener("visibilitychange",()=>{if(!document.hidden&&store==="db")loadAll()});
 }
 const NICK={charlotte:"Chaz"};
@@ -360,10 +360,16 @@ async function loadAll(){
   const {data,error}=await sb.from("docs").select("doc_id,data,scope").in("scope",scopes);
   if(error){$("#app").innerHTML='<div class="notice">Your log could not load ('+esc(error.message)+'). Reopen the app to try again.</div>';return}
   S.libDocs={};S.recipeDocs={};
-  data.forEach(r=>ingest(r.doc_id,r.data));
+  data.sort((a,b)=>(b.doc_id==="settings")-(a.doc_id==="settings"));
+  data.forEach(r=>ingest(r.doc_id,flipPlan(r.doc_id,r.data)));
   S.lib=Object.keys(S.libDocs).sort().flatMap(k=>S.libDocs[k]);S.recipes=Object.keys(S.recipeDocs).sort().flatMap(k=>S.recipeDocs[k]);
   store="db";if(!document.querySelector(".sheet"))render();
 }
+function flipPlan(id,d){
+  if(!(S.settings&&S.settings.planRole==="wife")||!id.startsWith("plan-")||!d||!d.days)return d;
+  const o=JSON.parse(JSON.stringify(d));
+  Object.values(o.days).forEach(day=>Object.values(day).forEach(list=>Array.isArray(list)&&list.forEach(e=>{if(e&&typeof e==="object"){const w=e.who||"me";e.who=w==="me"?"wife":w==="wife"?"me":w}})));
+  return o}
 const signOutBtn=()=>`<button class="btn ghost" data-act="signout">Sign out</button>`;
 function loginScreen(mode){mode=mode||"in";
   $("#app").innerHTML=`<form class="login" id="loginform"><h1>Fuel Log</h1>
