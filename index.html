@@ -1498,7 +1498,7 @@ const DEFAULT_ROUTINE={on:true,days:[1,2,3,4,5],holidays:[],items:[
   {meal:"Snacks",foodId:"aldi-strawberry-pouch",amount:1,label:"Mid-morning"},
   {meal:"Lunch",foodId:"meal-usual-lunch",amount:1},
   {meal:"Snacks",foodId:"meal-double-shake",amount:1,label:"Afternoon"}]};
-function routine(){return S.settings.routine||DEFAULT_ROUTINE}
+function routine(){return S.settings.routine||{on:false,days:[1,2,3,4,5],holidays:[],items:[]}}
 function inHoliday(k,r){return (r.holidays||[]).some(h=>h.from&&h.to&&k>=h.from&&k<=h.to)}
 function routineDay(k){const r=routine();return r.on&&(r.days||[]).includes(keyToDate(k).getDay())&&!inHoliday(k,r)}
 /* meals planned for you today (or a future day you open) go straight onto that day's log, once each;
