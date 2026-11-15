@@ -209,6 +209,7 @@ details.need .item{border-left:0;border-right:0}
   <button class="tab" data-tab="shop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 4h2l2.4 11h11.2L21 8H7"/><circle cx="9" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/></svg>Shop</button>
   <button class="tab" data-tab="recipes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/></svg>Recipes</button>
   <button class="tab" data-tab="foods"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h14v16H5z"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>Meals</button>
+  <button class="tab" data-tab="people" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><span id="peoplelabel">Family</span></button>
   <button class="tab" data-tab="ask" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v11H9l-5 4z"/><path d="M9 10h.01M12 10h.01M15 10h.01"/></svg>Ask</button>
 </nav>
 <div id="overlay"></div>
@@ -306,6 +307,7 @@ async function boot(){
   PROFILE=prof;
   if(!prof.approved){$("#app").innerHTML=`<div class="login"><h1>Nearly there</h1><p>Thanks, ${esc(prof.name||"")}. Brad needs to let you in before you can see the recipes and plans. Once he has, close the app and open it again.</p>${signOutBtn()}</div>`;return}
   await loadAll();
+  loadPeople();
   sb.channel("docs").on("postgres_changes",{event:"*",schema:"public",table:"docs"},p=>{
     const r=p.new&&p.new.doc_id?p.new:null;
     if(p.eventType==="DELETE"){const id=p.old&&p.old.doc_id;if(id&&id.startsWith("day-")&&p.old.scope==="u:"+ME.id)delete S.days[id.slice(4)];if(!document.querySelector(".sheet"))render();return}
@@ -314,6 +316,44 @@ async function boot(){
     ingest(r.doc_id,r.data);if(!document.querySelector(".sheet"))render()}).subscribe();
   document.addEventListener("visibilitychange",()=>{if(!document.hidden&&store==="db")loadAll()});
 }
+const NICK={charlotte:"Chaz"};
+let PEOPLE=[];  /* [{id,name,target,days:{date:kcal}}] */
+async function loadPeople(){
+  const {data:v}=await sb.from("viewers").select("target");if(!v||!v.length)return;
+  const out=[];
+  for(const {target} of v){
+    const {data:pr}=await sb.from("profiles").select("name").eq("user_id",target).maybeSingle();
+    const {data:docs}=await sb.from("docs").select("doc_id,data").eq("scope","u:"+target);
+    const days={};let tgt=null;
+    (docs||[]).forEach(r=>{if(r.doc_id==="settings")tgt=r.data&&r.data.target;
+      else if(r.doc_id.startsWith("day-")){const it=(r.data&&r.data.items)||[];if(it.length)days[r.doc_id.slice(4)]=Math.round(it.reduce((a,i)=>a+(+i.kcal||0),0))}});
+    const nm=(pr&&pr.name)||"Family";out.push({id:target,name:NICK[nm.toLowerCase()]||nm,target:tgt,days});
+  }
+  PEOPLE=out;const b=document.querySelector('.tab[data-tab="people"]');if(b){b.hidden=false;const l=$("#peoplelabel");if(l)l.textContent=PEOPLE[0].name}
+  if(tab==="people"&&!document.querySelector(".sheet"))render()}
+function liftLogData(){try{return JSON.parse(localStorage.getItem("liftlog-v1")||"null")}catch(e){return null}}
+function renderPeople(){
+  if(!PEOPLE.length)return '<p class="muted">Loading…</p>';
+  const P=PEOPLE[0],t=P.target,tk=todayKey();
+  const last=[...Array(14)].map((_,i)=>shift(tk,-i));
+  const rows=last.map(d=>{const k=P.days[d];const pct=t&&k?Math.min(100,k/t*100):0;const over=t&&k>t;
+    return `<div class="item" style="flex-direction:column;align-items:stretch;gap:4px"><div class="row" style="justify-content:space-between"><span>${d===tk?"Today":esc(shortDate(d))}</span><span class="num">${k!=null?fmt(k)+" kcal":"—"}</span></div>${k!=null&&t?`<div style="height:6px;border-radius:3px;background:var(--line)"><div style="height:6px;border-radius:3px;width:${pct}%;background:${over?"var(--over)":"var(--accent)"}"></div></div>`:""}</div>`}).join("");
+  const logged=last.filter(d=>d<tk&&P.days[d]!=null),avg=logged.length?logged.reduce((a,d)=>a+P.days[d],0)/logged.length:null;
+  const ll=liftLogData();let body="";
+  if(ll&&Array.isArray(ll.body)){
+    const w=ll.body.filter(r=>r.weight!=null).sort((a,b)=>a.date<b.date?-1:1),st=ll.settings&&ll.settings.startWeight;
+    if(w.length){const cur=w[w.length-1].weight,from=st!=null?st:w[0].weight,ch=cur-from;
+      body+=`<div class="item"><span class="name">Weight now<br><span class="amt">${esc(shortDate(w[w.length-1].date))}</span></span><span class="num">${cur} kg</span></div>
+        <div class="item"><span class="name">Since starting at ${from} kg</span><span class="num" style="color:${ch<=0?"var(--accent)":"var(--over)"}">${ch<=0?"−":"+"}${Math.abs(ch).toFixed(1)} kg</span></div>`}
+    const lifts=Array.isArray(ll.lifts)?ll.lifts:[],best={};
+    lifts.forEach(r=>{const n=r.lift||r.name;if(!n)return;const wt=+r.weight||0;if(!best[n]||wt>best[n].w||(wt===best[n].w&&r.date>best[n].d))best[n]={w:wt,d:r.date}});
+    const ln=Object.keys(best);
+    if(ln.length)body+=`<div class="item"><span class="name"><strong>Heaviest lifts</strong></span></div>`+ln.map(n=>`<div class="item"><span class="name">${esc(n)}<br><span class="amt">${esc(shortDate(best[n].d))}</span></span><span class="num">${best[n].w} kg</span></div>`).join("");
+  }
+  if(!body)body=`<div class="empty">Open <a href="../lift-log/">Lift Log</a> on this phone once (with Chaz's sheet connected) and her weight and lifts will show here.</div>`;
+  return `<header class="dayhead"><div class="title"><h1>${esc(P.name)}</h1><div class="sub muted">${t?`Target ${fmt(t)} kcal a day`:"No calorie target set yet"}${avg!=null?` · last ${logged.length} days average ${fmt(avg)} kcal`:""}</div></div></header>
+    <section class="meal"><div class="mealhead"><h3>Calories, last 14 days</h3></div><div class="list">${rows}</div></section>
+    <section class="meal"><div class="mealhead"><h3>Weight & lifts</h3><a class="btn small ghost" href="../lift-log/" style="margin-left:auto;text-decoration:none">Open Lift Log</a></div><div class="list">${body}</div></section>`}
 async function loadAll(){
   const scopes=["lib","u:"+ME.id,"h:"+PROFILE.household_id];
   const {data,error}=await sb.from("docs").select("doc_id,data,scope").in("scope",scopes);
@@ -353,7 +393,7 @@ function render(){
   document.querySelectorAll(".tab").forEach(b=>b.setAttribute("aria-current",String(b.dataset.tab===tab)));
   const app=$("#app");
   if(store==="none"){app.innerHTML='<p class="muted">Loading your log…</p>';return}
-  app.innerHTML=({day:renderDay,history:renderHistory,plan:renderPlan,shop:renderShop,recipes:renderRecipes,foods:renderFoods,ask:renderAsk})[tab]();
+  app.innerHTML=({day:renderDay,history:renderHistory,plan:renderPlan,shop:renderShop,recipes:renderRecipes,foods:renderFoods,ask:renderAsk,people:renderPeople})[tab]();
   if(tab==="ask"&&lastAnswer) $("#answer").textContent=lastAnswer;
 }
 function gauge(k){
