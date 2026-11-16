@@ -667,6 +667,7 @@ function shopList(){
   const left=mergeParts(inst.filter(i=>!st.got[i.k]),st.sec), basket=mergeParts(inst.filter(i=>st.got[i.k]),st.sec);
   st.regulars.filter(regOn).forEach(r=>(r.got?basket:left).push({key:"r:"+r.id,keys:[],name:r.text,qty:"",from:"Regular · "+everyText(r.every),reg:r.id,perish:0,sec:st.sec["r:"+r.id]||sectionOf(r.text)}));
   st.extras.forEach(x=>(x.got?basket:left).push({key:"x:"+x.id,keys:[],name:x.text,qty:"",from:"Added by you",extra:x.id,perish:0,sec:st.sec["x:"+x.id]||sectionOf(x.text)}));
+  left.concat(basket).forEach(i=>{if(i.sec==="Refrigerated")i.sec="Refrigerator";if(!SECTIONS.includes(i.sec))i.sec="Other"});
   return {left,basket};
 }
 function renderShop(){
@@ -833,14 +834,18 @@ function renderPlan(){
 }
 
 /* ---------- shop ---------- */
-const SECTIONS=["Fruit & veg","Refrigerated","Frozen","Dried food","Cleaning","Other"];
+const SECTIONS=["Fruit & veg","Refrigerator","Dried food","Frozen","Cleaning","Other"];
 function sectionOf(t){
   t=(t||"").toLowerCase();
+  /* toiletries, baby and household bits go in Other (so "toothpaste" isn't mistaken for tomato paste) */
+  if(/tooth|mouthwash|floss|shampoo|conditioner|shower gel|body wash|hand soap|\bsoap\b|deodorant|razor|shav|cotton (pad|bud|wool)|tissues|nappy|nappies|baby wipe|\bwipes\b|sudocrem|calpol|plasters|paracetamol|ibuprofen|sun ?cream|moisturi|lotion|sanitary|tampon|toilet roll|loo roll/.test(t)) return "Other";
+  if(/unblock|drain|descal|oven clean|polish|air freshener/.test(t)) return "Cleaning";
+  if(/biscoff|biscuit|crisps|cereal|crackers|crispbread/.test(t)) return "Dried food";
   if(/wash(ing)?[- ]up|bleach|detergent|disinfect|cleaner|cleaning|spray|bin bag|kitchen roll|toilet roll|loo roll|sponge|dishwasher|laundry|fabric|softener|surface wipe|antibac|limescale|fairy|foil|cling film|bin liner/.test(t)) return "Cleaning";
   if(/frozen|ice cream/.test(t)) return "Frozen";
   if(/\btins?\b|tinned|\bcans?\b|\bjar\b|paste|pur[eé]e|dried|powder|flakes|ground|sauce|stock|granules|seeds|\boil\b|vinegar|flour|cornflour|\brice\b|pasta|spaghetti|fusilli|linguine|orzo|noodles|lentils|split peas|chickpeas|butter beans|kidney beans|pinto|baked beans|passata|sugar|honey|syrup|coconut milk|black pepper|\bsalt\b|spice|cumin|paprika|turmeric|garam|curry|cinnamon|oregano|thyme leaves|stock cube|oats|whey|protein powder|bagel|bread|wrap|tortilla|rolls?\b|bun|crouton|couscous|cocoa|chocolate|jam|ketchup|mustard|mayo|worcester|soy|hoisin|oyster|sriracha|gochujang|harissa|pesto|sun ?dried|wine|port\b|cereal|biscuit|crisps|nuts|peanut butter|tahini|raisins|sultanas|desiccated|cardamom|food colouring|ras el hanout|brandy|whisk|seasoning|mirin|vanilla|extract|pickle|capers|olives/.test(t)) return "Dried food";
   if(/\bpeas\b|edamame/.test(t)) return "Frozen";
-  if(/chicken|beef|pork|lamb|mince|sausage|bacon|\bham\b|chorizo|prosciutto|duck|steak|brisket|ribs|fish|\bcod\b|prawn|salmon|milk|cream|cr[eè]me|yog(h)?urt|cheese|cheddar|feta|halloumi|mozzarella|stilton|parmesan|butter|\beggs?\b|gnocchi|pouch|houmous|hummus|coleslaw/.test(t)) return "Refrigerated";
+  if(/chicken|beef|pork|lamb|mince|sausage|bacon|\bham\b|chorizo|prosciutto|duck|steak|brisket|ribs|fish|\bcod\b|prawn|salmon|milk|cream|cr[eè]me|yog(h)?urt|cheese|cheddar|feta|halloumi|mozzarella|stilton|parmesan|butter|\beggs?\b|gnocchi|pouch|houmous|hummus|coleslaw/.test(t)) return "Refrigerator";
   if(/onion|garlic|carrot|potato|pepper|chilli|ginger|lemon|lime|orange|apple|banana|pear|pineapple|tomato|mushroom|spinach|salad|lettuce|rocket|coriander|basil|parsley|mint|dill|chives|thyme|rosemary|spring onion|leek|celery|courgette|broccoli|cauliflower|pak choi|mangetout|sugar snap|beansprout|cabbage|kale|squash|aubergine|avocado|cucumber|sweetcorn|corn on|herbs|lemongrass|fruit|berr|grape|melon|sage|jalape|shallot|watercress|plum|apricot|mango|berries|beans, trimmed|swede|parsnip|beetroot|radish|green beans/.test(t)) return "Fruit & veg";
   return "Other";
 }
