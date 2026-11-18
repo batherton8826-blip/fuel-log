@@ -329,6 +329,10 @@ async function loadPeople(){
       else if(r.doc_id.startsWith("day-")){const it=(r.data&&r.data.items)||[];if(it.length)days[r.doc_id.slice(4)]=Math.round(it.reduce((a,i)=>a+(+i.kcal||0),0))}});
     const nm=(pr&&pr.name)||"Family";out.push({id:target,name:NICK[nm.toLowerCase()]||nm,target:tgt,days,liftlog:ll});
   }
+  /* Lift Log on this person's own phone may have saved her lifts into your account instead: use whichever copy is newer */
+  try{const {data:mine}=await sb.from("docs").select("data").eq("scope","u:"+ME.id).eq("doc_id","liftlog").maybeSingle();
+    if(mine&&mine.data&&out[0]){const a=out[0].liftlog,b=mine.data,size=x=>x?((x.body||[]).length+(x.lifts||[]).length):0;
+      if(!size(a)||(size(b)&&(b.updated||"")>(a.updated||"")))out[0].liftlog=b}}catch(e){}
   PEOPLE=out;const b=document.querySelector('.tab[data-tab="people"]');if(b){b.hidden=false;const l=$("#peoplelabel");if(l)l.textContent=PEOPLE[0].name}
   if(tab==="people"&&!document.querySelector(".sheet"))render()}
 function liftLogData(){try{return JSON.parse(localStorage.getItem("liftlog-v1")||"null")}catch(e){return null}}
@@ -351,7 +355,7 @@ function renderPeople(){
     const ln=Object.keys(best);
     if(ln.length)body+=`<div class="item"><span class="name"><strong>Heaviest lifts</strong></span></div>`+ln.map(n=>`<div class="item"><span class="name">${esc(n)}<br><span class="amt">${esc(shortDate(best[n].d))}</span></span><span class="num">${best[n].w} kg</span></div>`).join("");
   }
-  if(!body)body=`<div class="empty">Her weight and lifts appear here once she connects Lift Log to her Fuel Log account (the sign-in box under Target calories in Lift Log).</div>`;
+  if(!body)body=`<div class="empty">No weights or lifts yet. Open Lift Log on the phone where her weights are logged, and sign in with Fuel Log there (the box under Target calories): her weights and lifts then appear here.</div>`;
   return `<header class="dayhead"><div class="title"><h1>${esc(P.name)}</h1><div class="sub muted">${t?`Target ${fmt(t)} kcal a day`:"No calorie target set yet"}${avg!=null?` · last ${logged.length} days average ${fmt(avg)} kcal`:""}</div></div></header>
     <section class="meal"><div class="mealhead"><h3>Calories, last 14 days</h3></div><div class="list">${rows}</div></section>
     <section class="meal"><div class="mealhead"><h3>Weight & lifts</h3><a class="btn small ghost" href="../lift-log/" style="margin-left:auto;text-decoration:none">Open Lift Log</a></div><div class="list">${body}</div></section>`}
